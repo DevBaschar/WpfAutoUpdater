@@ -11,7 +11,7 @@ namespace WpfAutoUpdater.Helpers
             var asm = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
             var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
             if (!string.IsNullOrWhiteSpace(info)) return info;
-            return asm.GetName().Version?.ToString() ?? "1.1.4";
+            return asm.GetName().Version?.ToString() ?? "1.1.5";
         }
     }
 }

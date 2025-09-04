@@ -14,6 +14,6 @@
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             FontSize="50"
-            Text="Hallo World!" />
+            Text="Hallo World! Bashar" />
     </Grid>
 </Window>
