@@ -179,42 +179,79 @@ namespace WpfAutoUpdater.ViewModels
             if (string.IsNullOrWhiteSpace(DownloadUrl))
                 throw new InvalidOperationException("No download URL available.");
 
-            string tempZip = Path.Combine(Path.GetTempPath(), "WpfAutoUpdater.zip");
-            string extractDir = Path.Combine(Path.GetTempPath(), "WpfAutoUpdater_Extract");
-            string exePath = Environment.ProcessPath ?? throw new InvalidOperationException("Cannot determine process path.");
-            string exeName = Path.GetFileName(exePath);
 
-            // 1) Download
-            Status = "Downloading update...";
-            ProgressValue = 0;
-            ProgressText = string.Empty;
+            var exePath = Environment.ProcessPath!;
+            var exeName = Path.GetFileName(exePath);
+            var installDir = AppContext.BaseDirectory;
 
-            await _updater.DownloadWithProgressAsync(DownloadUrl, tempZip, (received, total) =>
+            var helperPath = Path.Combine(Path.GetTempPath(), exeName);
+            File.Copy(exePath, helperPath, overwrite: true);
+
+
+            // Staging paths
+            string versionSafe = (LatestVersion ?? "latest").Trim().Trim('"').Replace(':', '_').Replace('*', '_').Replace('?', '_').Replace('<', '_').Replace('>', '_').Replace('|', '_').Replace('\\', '_').Replace('/', '_');
+            string tempDir = Path.GetTempPath();
+            string tempZip = Path.Combine(tempDir, $"WpfAutoUpdater_{versionSafe}.zip");
+            string extractDir = Path.Combine(tempDir, $"WpfAutoUpdater_Extract_{versionSafe}");
+
+            try
             {
-                ProgressValue = total > 0 ? (received * 100.0 / total) : 0;
-                ProgressText = $"{received / 1024 / 1024} MB / {total / 1024 / 1024} MB";
-            }, ct);
+                // 1) Download
+                Status = "Downloading update...";
+                ProgressValue = 0;
+                ProgressText = string.Empty;
 
-            // 2) Extract to staging
-            Status = "Extracting update...";
-            if (Directory.Exists(extractDir)) Directory.Delete(extractDir, true);
-            ZipFile.ExtractToDirectory(tempZip, extractDir);
+                await _updater.DownloadWithProgressAsync(DownloadUrl, tempZip, (received, total) =>
+                {
+                    ProgressValue = total > 0 ? (received * 100.0 / total) : 0;
+                    ProgressText = total > 0
+                        ? $"{received / 1024 / 1024} MB / {total / 1024 / 1024} MB"
+                        : $"{received / 1024 / 1024} MB";
+                }, ct);
 
-            // 3) Launch helper to apply update
-            Status = "Applying update...";
-            var psi = new ProcessStartInfo
+                // 2) Extract to staging
+                Status = "Extracting update...";
+                if (Directory.Exists(extractDir)) Directory.Delete(extractDir, true);
+
+                // If your target framework supports overwriteFiles overload:
+                // ZipFile.ExtractToDirectory(tempZip, extractDir, overwriteFiles: true);
+                ZipFile.ExtractToDirectory(tempZip, extractDir);
+
+                // 3) Start helper (copy of current exe) from TEMP and quit.
+                //    The helper must not run from installDir, otherwise we can't overwrite the exe.
+                //string helperPath = Path.Combine(tempDir, exeName);
+                File.Copy(exePath, helperPath, overwrite: true);
+
+                var psi = new ProcessStartInfo
+
+
+                {
+                    FileName = helperPath,
+                    Arguments = $"--apply-update \"{extractDir}\" --target \"{installDir}\" --pid {Process.GetCurrentProcess().Id}",
+                    UseShellExecute = true,
+                    WorkingDirectory = Path.GetTempPath()
+                };
+
+
+                Process.Start(psi);
+
+                // Optional: notify UI
+                UpdateCompleted?.Invoke(this, EventArgs.Empty);
+
+                // 4) Shutdown current app so helper can replace files
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    Application.Current.Shutdown();
+                });
+            }
+            catch (Exception ex)
             {
-                FileName = exePath,
-                Arguments = $"--apply-update \"{extractDir}\" --skip-update-check",
-                UseShellExecute = true
-            };
-            Process.Start(psi);
-
-            // 👉 Notify App.xaml.cs that we're done
-            UpdateCompleted?.Invoke(this, EventArgs.Empty);
-
-            // 4) Close current app so helper can replace files
-            Application.Current.Shutdown();
+                Status = $"Update failed: {ex.Message}";
+                // (Optional) clean staging on failure
+                try { if (Directory.Exists(extractDir)) Directory.Delete(extractDir, true); } catch { }
+                try { if (File.Exists(tempZip)) File.Delete(tempZip); } catch { }
+            }
         }
+
     }
 }
