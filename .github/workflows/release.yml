@@ -11,6 +11,11 @@ on:
 permissions:
   contents: write
 
+# Use dynamic name
+defaults:
+  run:
+    shell: pwsh
+
 jobs:
   build-zip:
     runs-on: windows-latest
@@ -27,15 +32,6 @@ jobs:
       - name: Restore
         run: dotnet restore
 
-      - name: Set version
-        shell: pwsh
-        run: |
-            if (${{ github.ref_type }} -eq 'tag') {
-                Write-Host "Running for release tag ${{ github.ref_name }}"
-            } else {
-                Write-Host "Running for branch push ${{ github.ref_name }}"
-            }
-      
       - name: Set version from tag
         shell: pwsh
         run: |
