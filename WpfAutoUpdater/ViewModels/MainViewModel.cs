@@ -172,84 +172,135 @@ namespace WpfAutoUpdater.ViewModels
 
         public string? DownloadUrl { get; private set; }
 
-
         [RelayCommand]
-        public async Task DownloadAndInstallAsync(CancellationToken ct = default)
+        public async Task DownloadAndInstallAsync()
         {
-            if (string.IsNullOrWhiteSpace(DownloadUrl))
-                throw new InvalidOperationException("No download URL available.");
-
-
-            var exePath = Environment.ProcessPath!;
-            var exeName = Path.GetFileName(exePath);
-            var installDir = AppContext.BaseDirectory;
-
-            var helperPath = Path.Combine(Path.GetTempPath(), exeName);
-            File.Copy(exePath, helperPath, overwrite: true);
-
-
-            // Staging paths
-            string versionSafe = (LatestVersion ?? "latest").Trim().Trim('"').Replace(':', '_').Replace('*', '_').Replace('?', '_').Replace('<', '_').Replace('>', '_').Replace('|', '_').Replace('\\', '_').Replace('/', '_');
-            string tempDir = Path.GetTempPath();
-            string tempZip = Path.Combine(tempDir, $"WpfAutoUpdater_{versionSafe}.zip");
-            string extractDir = Path.Combine(tempDir, $"WpfAutoUpdater_Extract_{versionSafe}");
+            if (!IsUpdateAvailable)
+            {
+                Status = "No update available.";
+                return;
+            }
 
             try
             {
-                // 1) Download
                 Status = "Downloading update...";
                 ProgressValue = 0;
                 ProgressText = string.Empty;
 
-                await _updater.DownloadWithProgressAsync(DownloadUrl, tempZip, (received, total) =>
-                {
-                    ProgressValue = total > 0 ? (received * 100.0 / total) : 0;
-                    ProgressText = total > 0
-                        ? $"{received / 1024 / 1024} MB / {total / 1024 / 1024} MB"
-                        : $"{received / 1024 / 1024} MB";
-                }, ct);
+                string temp = Path.GetTempPath();
+                string tmpZip = Path.Combine(temp, "WpfAutoUpdaterUpdate.zip");
+                string tmpDir = Path.Combine(temp, "WpfAutoUpdaterUpdate");
 
-                // 2) Extract to staging
+                if (File.Exists(tmpZip)) File.Delete(tmpZip);
+                if (Directory.Exists(tmpDir)) Directory.Delete(tmpDir, true);
+                Directory.CreateDirectory(tmpDir);
+
+                // Use the URL already found by CheckForUpdateAsync if available
+                if (string.IsNullOrWhiteSpace(DownloadUrl))
+                {
+                    var release = await _updater.GetLatestReleaseAsync();
+                    DownloadUrl = release.downloadUrl;
+                }
+                if (string.IsNullOrWhiteSpace(DownloadUrl))
+                    throw new InvalidOperationException("No downloadable asset found in the latest release.");
+
+                await _updater.DownloadWithProgressAsync(DownloadUrl!, tmpZip, (bytes, total) =>
+                {
+                    if (total > 0)
+                    {
+                        var pct = Math.Round(bytes * 100.0 / total, 2);
+                        ProgressValue = pct;
+                        ProgressText = $"{pct}% ({bytes / 1024 / 1024} MB of {total / 1024 / 1024} MB)";
+                    }
+                    else
+                    {
+                        ProgressText = $"{bytes / 1024 / 1024} MB";
+                    }
+                }, CancellationToken.None);
+
                 Status = "Extracting update...";
-                if (Directory.Exists(extractDir)) Directory.Delete(extractDir, true);
+                ZipFile.ExtractToDirectory(tmpZip, tmpDir, overwriteFiles: true);
 
-                // If your target framework supports overwriteFiles overload:
-                // ZipFile.ExtractToDirectory(tempZip, extractDir, overwriteFiles: true);
-                ZipFile.ExtractToDirectory(tempZip, extractDir);
+                // Build updater .bat
+                string exePath = Process.GetCurrentProcess().MainModule!.FileName!;
+                string appDir = Path.GetDirectoryName(exePath)!;
+                string updaterBat = Path.Combine(temp, "run_update.bat");
 
-                // 3) Start helper (copy of current exe) from TEMP and quit.
-                //    The helper must not run from installDir, otherwise we can't overwrite the exe.
-                //string helperPath = Path.Combine(tempDir, exeName);
-                File.Copy(exePath, helperPath, overwrite: true);
+                // Lock file: batch waits until this file is deleted (we delete it on ProcessExit)
+                string lockFile = Path.Combine(temp, $"lock_{Guid.NewGuid():N}.tmp");
+                File.WriteAllText(lockFile, "lock");
 
-                var psi = new ProcessStartInfo
+                // Relaunch arg to ensure the app shows ViewWindow immediately after update
+                const string relaunchArg = "--skip-update-check";
 
+                // Use ROBUST copy. Prefer ROBOCOPY (retries) over XCOPY. /E copies subdirs, /R:5 retries, /W:2 waits.
+                // NOTE: ROBOCOPY returns 1 for "OK with copies", which is not an error.
+                string bat = $@"@echo off
+setlocal
+set SRC=""{tmpDir}""
+set DEST=""{appDir}""
+:waitloop
+if exist ""{lockFile}"" (
+  timeout /t 1 /nobreak >nul
+  goto waitloop
+)
+robocopy ""%SRC%"" ""%DEST%"" /E /R:5 /W:2 /NFL /NDL /NP /NJH /NJS >nul
+start """" ""{exePath}"" {relaunchArg}
+endlocal
+";
 
+                File.WriteAllText(updaterBat, bat, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+                // IMPORTANT: Start the batch NOW (while the lock exists), so it waits.
+                bool installUnderProgramFiles = appDir.StartsWith(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    StringComparison.OrdinalIgnoreCase)
+                    || appDir.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                    StringComparison.OrdinalIgnoreCase);
+
+                if (installUnderProgramFiles)
                 {
-                    FileName = helperPath,
-                    Arguments = $"--apply-update \"{extractDir}\" --target \"{installDir}\" --pid {Process.GetCurrentProcess().Id}",
-                    UseShellExecute = true,
-                    WorkingDirectory = Path.GetTempPath()
+                    // Needs elevation → will show UAC + a brief console (cannot be hidden with .bat).
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = updaterBat,
+                        UseShellExecute = true,
+                        Verb = "runas",               // elevate so copy can succeed under Program Files
+                        WorkingDirectory = temp
+                    };
+                    Process.Start(psi);
+                }
+                else
+                {
+                    // Non-elevated → we can hide the console by launching via cmd.exe /c with CreateNoWindow
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = $"/c \"\"{updaterBat}\"\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        WindowStyle = ProcessWindowStyle.Hidden,
+                        WorkingDirectory = temp
+                    };
+                    Process.Start(psi);
+                }
+
+                // On exit: delete the lock (so the .bat proceeds)
+                AppDomain.CurrentDomain.ProcessExit += (_, __) =>
+                {
+                    try { File.Delete(lockFile); } catch { /* ignore */ }
                 };
 
+                Status = "Update ready. The app will restart to complete installation...";
+                await Task.Delay(800);
 
-                Process.Start(psi);
-
-                // Optional: notify UI
                 UpdateCompleted?.Invoke(this, EventArgs.Empty);
 
-                // 4) Shutdown current app so helper can replace files
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    Application.Current.Shutdown();
-                });
+                Application.Current.Shutdown();
             }
             catch (Exception ex)
             {
                 Status = $"Update failed: {ex.Message}";
-                // (Optional) clean staging on failure
-                try { if (Directory.Exists(extractDir)) Directory.Delete(extractDir, true); } catch { }
-                try { if (File.Exists(tempZip)) File.Delete(tempZip); } catch { }
             }
         }
 

@@ -19,72 +19,42 @@ namespace WpfAutoUpdater
         {
             base.OnStartup(e);
 
-            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
-            Log($"Args: {string.Join(' ', e.Args)}");
-
             var vm = new MainViewModel();
-            var args = e.Args;
+            bool skip = e.Args.Any(a => a.Equals("--skip-update-check", StringComparison.OrdinalIgnoreCase));
 
-            bool skipUpdateCheck = args.Any(a => a.Equals("--skip-update-check", StringComparison.OrdinalIgnoreCase));
-            bool hasApply = TryGetArgValue(args, "--apply-update", out var extractDir);
-            bool hasTarget = TryGetArgValue(args, "--target", out var targetDir);
-            int? parentPid = TryGetArgInt(args, "--pid");
-
-            // 1) Apply-update helper mode (no UI)
-            if (hasApply)
+            if (skip)
             {
-                Log($"Mode: APPLY extractDir={extractDir} targetDir={targetDir} pid={parentPid}");
-                if (!hasTarget || string.IsNullOrWhiteSpace(targetDir))
-                {
-                    Log("ERROR: --target is required in apply mode.");
-                    Shutdown(-1);
-                    return;
-                }
-
-                await ApplyUpdateAndRelaunchAsync(extractDir!, targetDir!, parentPid);
-                Shutdown();
-                return;
-            }
-
-            // 2) Skip path → go straight to ViewWindow
-            if (skipUpdateCheck)
-            {
-                Log("Mode: SKIP → show ViewWindow");
                 var view = new ViewWindow { DataContext = vm };
                 MainWindow = view;
                 view.Show();
                 return;
             }
 
-            // 3) Normal startup: check before showing anything
+            // Check BEFORE showing any window
             try
             {
-                Log("Checking for update...");
                 await vm.CheckForUpdateAsync();
-
                 if (vm.IsUpdateAvailable)
                 {
-                    Log($"Update available: {vm.LatestVersion} → show MainWindow");
                     var main = new MainWindow { DataContext = vm };
                     MainWindow = main;
                     main.Show();
                 }
                 else
                 {
-                    Log("No update → show ViewWindow");
                     var view = new ViewWindow { DataContext = vm };
                     MainWindow = view;
                     view.Show();
                 }
             }
-            catch (Exception ex)
+            catch
             {
-                Log("Check failed → show ViewWindow. " + ex);
                 var view = new ViewWindow { DataContext = vm };
                 MainWindow = view;
                 view.Show();
             }
         }
+
 
         private static async Task ApplyUpdateAndRelaunchAsync(string extractDir, string targetDir, int? parentPid)
         {
