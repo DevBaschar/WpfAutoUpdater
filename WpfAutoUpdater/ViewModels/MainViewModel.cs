@@ -113,6 +113,9 @@ namespace WpfAutoUpdater.ViewModels
                 var lockFile = Path.Combine(Path.GetTempPath(), $"lock_{Guid.NewGuid():N}.tmp");
                 File.WriteAllText(lockFile, "lock");
 
+                // We'll ask the app to open a specific view after the update.
+                const string postUpdateArg = "--post-update=view";
+
                 // Build a .bat script (C# string interpolation + verbatim)
                 var bat = $@"@echo off
 setlocal
@@ -122,7 +125,7 @@ set DEST=""{appDir}""
 ping 127.0.0.1 -n 2 > nul
 if exist ""{lockFile}"" goto waitloop
 xcopy /E /Y /I ""%SRC%\*"" ""%DEST%\"" > nul
-start """" ""{exePath}""
+start """" ""{exePath}"" {postUpdateArg}
 endlocal
 ";
 
