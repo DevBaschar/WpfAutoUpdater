@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - master
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:     # Allow manual runs
   
 permissions:
   contents: write
