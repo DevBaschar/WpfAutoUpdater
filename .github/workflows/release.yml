@@ -1,4 +1,4 @@
-name: Build and Release
+﻿name: Build and Release
 
 on:
   push:
@@ -63,10 +63,30 @@ jobs:
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
           Compress-Archive -Path 'out/win-x64/*' -DestinationPath 'artifacts/WpfAutoUpdater-win-x64.zip'
 
+      - name: Extract Version
+        id: extractVersion
+        shell: pwsh
+        run: |
+            $xml = [xml](Get-Content WpfAutoUpdater/WpfAutoUpdater.csproj)
+            [string] $version = [Version] $xml.Project.PropertyGroup.ApplicationDisplayVersion
+            echo "version=$($version)" >> $env:GITHUB_OUTPUT
+
+      - name: Create Tag
+        uses: actions/github-script@v5
+        with:
+            github-token: ${{ secrets.GITHUB_TOKEN }}
+            script: |
+                github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: context.sha,
+                ref: 'refs/tags/v${{  steps.extractVersion.outputs.version }}'
+                })
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-            tag_name: ${{ github.ref_name }}
+            tag_name: v${{ steps.extractVersion.outputs.version }}
             name: Release ${{ github.ref_name }}
             files: artifacts/WpfAutoUpdater-win-x64.zip
             generate_release_notes: true
