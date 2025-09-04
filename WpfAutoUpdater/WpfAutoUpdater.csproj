@@ -7,11 +7,11 @@
         <ImplicitUsings>enable</ImplicitUsings>
 
         <!-- Version will be replaced by GitHub Actions -->
-        <ApplicationDisplayVersion>1.2.4</ApplicationDisplayVersion>
-        <!--<Version>1.0.0</Version>
-        <FileVersion>1.0.0.0</FileVersion>
-        <AssemblyVersion>1.0.0.0</AssemblyVersion>
-        <InformationalVersion>1.0.0+0</InformationalVersion>-->
+        <ApplicationDisplayVersion>1.2.5</ApplicationDisplayVersion>
+        <Version>1.2.5</Version>
+        <FileVersion>1.2.5.0</FileVersion>
+        <AssemblyVersion>1.2.5.0</AssemblyVersion>
+        <InformationalVersion>1.2.5+0</InformationalVersion>
     </PropertyGroup>
     <ItemGroup>
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
