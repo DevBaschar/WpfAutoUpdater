@@ -6,6 +6,10 @@ on:
       - 'v*.*.*'
   workflow_dispatch:
 
+# Needed to create releases with the GITHUB_TOKEN
+permissions:
+  contents: write
+
 jobs:
   build-zip:
     runs-on: windows-latest
@@ -29,19 +33,11 @@ jobs:
             -c Release -r win-x64 --self-contained false `
             -p:PublishSingleFile=true -o out/win-x64
 
-      - name: Create artifacts folder
-        shell: pwsh
-        run: New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-
       - name: Zip published app
         shell: pwsh
-        run: Compress-Archive -Path 'out/win-x64/*' -DestinationPath 'artifacts/WpfAutoUpdater-win-x64.zip'
-
-      - name: Upload artifact (for debugging)
-        uses: actions/upload-artifact@v4
-        with:
-          name: WpfAutoUpdater-win-x64
-          path: artifacts/WpfAutoUpdater-win-x64.zip
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Compress-Archive -Path 'out/win-x64/*' -DestinationPath 'artifacts/WpfAutoUpdater-win-x64.zip'
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -51,11 +47,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Optional MSIX packaging job (runs if packaging project exists)
   msix:
     runs-on: windows-latest
     needs: build-zip
-    if: ${{ always() }} # will be skipped gracefully if the .wapproj isn't present
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,23 +63,51 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      # Adjust the path below once you add the packaging project
-      - name: Build MSIX (Release|x64)
+      - name: Build MSIX if packaging project exists
+        id: build_msix
         shell: pwsh
         run: |
-          if (Test-Path 'WpfAutoUpdater.Package/WpfAutoUpdater.Package.wapproj') {
-            msbuild WpfAutoUpdater.Package/WpfAutoUpdater.Package.wapproj `
-              /p:Configuration=Release /p:Platform=x64 `
-              /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly
-          } else {
-            Write-Host "No .wapproj present. Skipping MSIX build."
+          $wapproj = Get-ChildItem -Recurse -Filter *.wapproj | Select-Object -First 1
+          if (-not $wapproj) {
+            Write-Host "No packaging project (.wapproj) found. Skipping MSIX."
+            echo "found=false" >> $env:GITHUB_OUTPUT
+            exit 0
           }
 
+          Write-Host "Found packaging project: $($wapproj.FullName)"
+          msbuild "$($wapproj.FullName)" /p:Configuration=Release /p:Platform=x64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly
+          echo "found=true" >> $env:GITHUB_OUTPUT
+
+      - name: Locate MSIX artifacts
+        id: find_msix
+        if: steps.build_msix.outputs.found == 'true'
+        shell: pwsh
+        run: |
+          $bundles = Get-ChildItem -Recurse -Filter *.msixbundle | ForEach-Object { $_.FullName }
+          $appinst = Get-ChildItem -Recurse -Filter *.appinstaller | ForEach-Object { $_.FullName }
+
+          if (($bundles.Count + $appinst.Count) -eq 0) {
+            Write-Warning "No MSIX artifacts found. Looked for *.msixbundle and *.appinstaller"
+            echo "found=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          # Write newline-delimited lists as outputs
+          "bundles<<EOF" >> $env:GITHUB_OUTPUT
+          $bundles | ForEach-Object { $_ } >> $env:GITHUB_OUTPUT
+          "EOF" >> $env:GITHUB_OUTPUT
+
+          "appinstaller<<EOF" >> $env:GITHUB_OUTPUT
+          $appinst | ForEach-Object { $_ } >> $env:GITHUB_OUTPUT
+          "EOF" >> $env:GITHUB_OUTPUT
+
+          echo "found=true" >> $env:GITHUB_OUTPUT
+
       - name: Upload MSIX artifacts
-        if: success()
+        if: steps.find_msix.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: msix
           path: |
-            **/*.msixbundle
-            **/*.appinstaller
+            ${{ steps.find_msix.outputs.bundles }}
+            ${{ steps.find_msix.outputs.appinstaller }}
