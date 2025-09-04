@@ -97,8 +97,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-            tag_name: v${{ steps.extractVersion.outputs.version }}
-            name: Release ${{ github.ref_name }}
+            tag_name: v${{ steps.extractVersion.outputs.version }}
+            name: Release v${{ steps.extractVersion.outputs.version }}
             files: artifacts/WpfAutoUpdater-win-x64.zip
             generate_release_notes: true
         env:
