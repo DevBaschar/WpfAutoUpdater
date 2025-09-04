@@ -5,8 +5,7 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
-
-# Needed to create releases with the GITHUB_TOKEN
+  
 permissions:
   contents: write
 
