@@ -8,7 +8,7 @@
 
         <!-- Version will be replaced by GitHub Actions -->
         <!--<ApplicationDisplayVersion>1.3.3</ApplicationDisplayVersion>-->
-        <Version>1.3.6</Version>
+        <Version>1.3.7</Version>
         <!--<FileVersion>1.2.5.0</FileVersion>
         <AssemblyVersion>1.2.5.0</AssemblyVersion>
         <InformationalVersion>1.2.5+0</InformationalVersion>-->

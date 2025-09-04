@@ -2,12 +2,10 @@
 
 on:
   push:
-    branches:
-      - master
     tags:
-      - 'v*.*.*'
-  workflow_dispatch:     # Allow manual runs
-  
+      - 'v*.*.*'   # Only runs when you push a version tag (e.g., v1.2.2)
+  workflow_dispatch:   # Allow manual trigger
+
 permissions:
   contents: write
 
@@ -35,38 +33,21 @@ jobs:
             [string] $version = [Version] $xml.Project.PropertyGroup.Version
             echo "version=$($version)" >> $env:GITHUB_OUTPUT
 
-      - name: Create Tag
-        uses: actions/github-script@v5
-        with:
-            github-token: ${{ secrets.GITHUB_TOKEN }}
-            script: |
-                github.rest.git.createRef({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                sha: context.sha,
-                ref: 'refs/tags/v${{  steps.extractVersion.outputs.version }}'
-                })
-      
       - name: Set version from tag
         shell: pwsh
         run: |
-            # Get the tag pushed (e.g., v1.2.1)
-            # $tag = "${{ github.ref_name }}"  # it will be "master" here
-            $tag = "${{ steps.extractVersion.outputs.version }}"
+            $tag = "${{ github.ref_name }}"
             Write-Host "Tag is $tag"
 
-            # Strip 'v' prefix if present
             if ($tag.StartsWith("v")) { $tag = $tag.Substring(1) }
             Write-Host "Version to use: $tag"
 
-            # Convert to 4-part version for AssemblyVersion/FileVersion
             $parts = $tag.Split(".")
             while ($parts.Length -lt 4) { $parts += "0" }
             $asmVersion = ($parts[0..3] -join ".")
 
             Write-Host "AssemblyVersion: $asmVersion"
 
-            # Update csproj
             (Get-Content WpfAutoUpdater/WpfAutoUpdater.csproj) -replace '<Version>.*</Version>', "<Version>$tag</Version>" `
                 -replace '<FileVersion>.*</FileVersion>', "<FileVersion>$asmVersion</FileVersion>" `
                 -replace '<AssemblyVersion>.*</AssemblyVersion>', "<AssemblyVersion>$asmVersion</AssemblyVersion>" `
@@ -85,17 +66,16 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
           Compress-Archive -Path 'out/win-x64/*' -DestinationPath 'artifacts/WpfAutoUpdater-win-x64.zip'
-          
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-            tag_name: v${{ steps.extractVersion.outputs.version }}
-            name: Release v${{ steps.extractVersion.outputs.version }}
+            tag_name: ${{ github.ref_name }}
+            name: Release ${{ github.ref_name }}
             files: artifacts/WpfAutoUpdater-win-x64.zip
             generate_release_notes: true
         env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
 
   msix:
     runs-on: windows-latest
@@ -142,7 +122,6 @@ jobs:
             exit 0
           }
 
-          # Write newline-delimited lists as outputs
           "bundles<<EOF" >> $env:GITHUB_OUTPUT
           $bundles | ForEach-Object { $_ } >> $env:GITHUB_OUTPUT
           "EOF" >> $env:GITHUB_OUTPUT
