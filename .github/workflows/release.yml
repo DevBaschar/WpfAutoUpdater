@@ -25,30 +25,6 @@ jobs:
       - name: Restore
         run: dotnet restore
       
-      - name: Set version from tag
-        shell: pwsh
-        run: |
-            # Get the tag pushed (e.g., v1.2.1)
-            $tag = "${{ github.ref_name }}"
-            Write-Host "Tag is $tag"
-
-            # Strip 'v' prefix if present
-            if ($tag.StartsWith("v")) { $tag = $tag.Substring(1) }
-            Write-Host "Version to use: $tag"
-
-            # Convert to 4-part version for AssemblyVersion/FileVersion
-            $parts = $tag.Split(".")
-            while ($parts.Length -lt 4) { $parts += "0" }
-            $asmVersion = ($parts[0..3] -join ".")
-
-            Write-Host "AssemblyVersion: $asmVersion"
-
-            # Update csproj
-            (Get-Content WpfAutoUpdater/WpfAutoUpdater.csproj) -replace '<Version>.*</Version>', "<Version>$tag</Version>" `
-                -replace '<FileVersion>.*</FileVersion>', "<FileVersion>$asmVersion</FileVersion>" `
-                -replace '<AssemblyVersion>.*</AssemblyVersion>', "<AssemblyVersion>$asmVersion</AssemblyVersion>" `
-                -replace '<InformationalVersion>.*</InformationalVersion>', "<InformationalVersion>$tag</InformationalVersion>" `
-                | Set-Content WpfAutoUpdater/WpfAutoUpdater.csproj
 
       - name: Publish (win-x64, framework-dependent)
         shell: pwsh
@@ -67,7 +43,7 @@ jobs:
         id: extractVersion
         shell: pwsh
         run: |
-            $xml = [xml](Get-Content WpfAutoUpdater/WpfAutoUpdater.csproj)
+            $xml = [xml](Get-Content ./WpfAutoUpdater/WpfAutoUpdater.csproj)
             [string] $version = [Version] $xml.Project.PropertyGroup.ApplicationDisplayVersion
             echo "version=$($version)" >> $env:GITHUB_OUTPUT
 
