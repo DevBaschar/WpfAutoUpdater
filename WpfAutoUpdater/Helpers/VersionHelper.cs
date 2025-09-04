@@ -12,7 +12,7 @@ namespace WpfAutoUpdater.Helpers
             //var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
             //if (!string.IsNullOrWhiteSpace(info)) return info;
             var version = asm.GetName().Version?.ToString();
-            return version ?? "1.2.0";
+            return version ?? "1.2.1";
         }
     }
 }
