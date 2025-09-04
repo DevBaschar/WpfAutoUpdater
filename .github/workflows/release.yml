@@ -32,7 +32,7 @@ jobs:
         shell: pwsh
         run: |
             $xml = [xml](Get-Content ./WpfAutoUpdater/WpfAutoUpdater.csproj)
-            [string] $version = [Version] $xml.Project.PropertyGroup.ApplicationDisplayVersion
+            [string] $version = [Version] $xml.Project.PropertyGroup.Version
             echo "version=$($version)" >> $env:GITHUB_OUTPUT
 
       - name: Create Tag
