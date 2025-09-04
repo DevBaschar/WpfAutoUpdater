@@ -181,7 +181,6 @@ namespace WpfAutoUpdater.ViewModels
 
             string tempZip = Path.Combine(Path.GetTempPath(), "WpfAutoUpdater.zip");
             string extractDir = Path.Combine(Path.GetTempPath(), "WpfAutoUpdater_Extract");
-            string installDir = AppContext.BaseDirectory;
             string exePath = Environment.ProcessPath ?? throw new InvalidOperationException("Cannot determine process path.");
             string exeName = Path.GetFileName(exePath);
 
@@ -190,40 +189,31 @@ namespace WpfAutoUpdater.ViewModels
             ProgressValue = 0;
             ProgressText = string.Empty;
 
-            await _updater.DownloadWithProgressAsync(
-                DownloadUrl,
-                tempZip,
-                (received, total) =>
-                {
-                    ProgressValue = total > 0 ? (received * 100.0 / total) : 0;
-                    ProgressText = $"{received / 1024 / 1024} MB / {total / 1024 / 1024} MB";
-                },
-                ct);
+            await _updater.DownloadWithProgressAsync(DownloadUrl, tempZip, (received, total) =>
+            {
+                ProgressValue = total > 0 ? (received * 100.0 / total) : 0;
+                ProgressText = $"{received / 1024 / 1024} MB / {total / 1024 / 1024} MB";
+            }, ct);
 
             // 2) Extract to staging
             Status = "Extracting update...";
             if (Directory.Exists(extractDir)) Directory.Delete(extractDir, true);
             ZipFile.ExtractToDirectory(tempZip, extractDir);
 
-            // 3) Spawn helper from %TEMP% (copy of this EXE), then quit
-            Status = "Preparing to apply update...";
-            ProgressText = "Starting apply helper";
-
-            // Copy the current EXE to temp so the original EXE isn't locked during copy
-            string helperPath = Path.Combine(Path.GetTempPath(), exeName); // same name in temp is fine
-            File.Copy(exePath, helperPath, overwrite: true);
-
-            // Start helper with arguments:
-            // --apply-update "<stagingDir>" --from-pid <currentpid> --exe-name "<exeName>"
+            // 3) Launch helper to apply update
+            Status = "Applying update...";
             var psi = new ProcessStartInfo
             {
-                FileName = helperPath,
-                Arguments = $"--apply-update \"{extractDir}\" --from-pid {Environment.ProcessId} --exe-name \"{exeName}\"",
+                FileName = exePath,
+                Arguments = $"--apply-update \"{extractDir}\" --skip-update-check",
                 UseShellExecute = true
             };
             Process.Start(psi);
 
-            // Close current app so files can be replaced
+            // 👉 Notify App.xaml.cs that we're done
+            UpdateCompleted?.Invoke(this, EventArgs.Empty);
+
+            // 4) Close current app so helper can replace files
             Application.Current.Shutdown();
         }
     }

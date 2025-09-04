@@ -9,12 +9,5 @@ namespace WpfAutoUpdater
         {
             InitializeComponent();
         }
-
-
-        public void OpenUpdatedViewWindow()
-        {
-            var view = new View { Owner = this };
-            view.Show(); // or ShowDialog();
-        }
     }
 }

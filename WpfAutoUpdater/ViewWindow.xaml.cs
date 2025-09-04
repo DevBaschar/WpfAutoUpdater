@@ -16,9 +16,9 @@ namespace WpfAutoUpdater;
 /// <summary>
 /// Interaktionslogik für View.xaml
 /// </summary>
-public partial class View : Window
+public partial class ViewWindow : Window
 {
-    public View()
+    public ViewWindow()
     {
         InitializeComponent();
     }

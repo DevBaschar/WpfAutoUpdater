@@ -17,12 +17,12 @@ namespace WpfAutoUpdater
             // 1) If we are in helper mode (apply update)
             if (HasArg(e.Args, "--apply-update"))
             {
-                await ApplyUpdateAndRelaunchAsync(e.Args);
+                await ApplyUpdateAndRelaunchAsync();
                 Shutdown();
                 return;
             }
 
-            // 2) Normal startup (silent mode not requested)
+            // 2) Normal startup
             bool skipUpdateCheck = HasArg(e.Args, "--skip-update-check");
 
             var vm = new MainViewModel();
@@ -40,11 +40,11 @@ namespace WpfAutoUpdater
 
                 if (vm.IsUpdateAvailable)
                 {
-                    // Show MainWindow (update UI)
+                    // Show update UI
                     var updateWindow = new MainWindow { DataContext = vm };
                     MainWindow = updateWindow;
                     updateWindow.Show();
-                    return; // ✅ Only return here if update window is shown
+                    return;
                 }
             }
             catch
@@ -52,14 +52,14 @@ namespace WpfAutoUpdater
                 // ignore errors → continue to View
             }
 
-            // 3) If no update → show View
+            // 3) No update → show View
             ShowView(vm);
         }
 
-
         private void ShowView(MainViewModel vm)
         {
-            var view = new View { DataContext = vm };
+            // ✅ fixed: correct class name
+            var view = new ViewWindow { DataContext = vm };
             MainWindow = view;
             view.Show();
         }
@@ -67,17 +67,15 @@ namespace WpfAutoUpdater
         private static bool HasArg(string[] args, string name) =>
             args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
 
-        private async Task ApplyUpdateAndRelaunchAsync(string[] args)
+        private async Task ApplyUpdateAndRelaunchAsync()
         {
             string installDir = AppContext.BaseDirectory;
-
-            // Where the update was extracted (must match your DownloadAndInstallAsync logic)
             string extractDir = Path.Combine(Path.GetTempPath(), "WpfAutoUpdater_Extract");
 
             if (!Directory.Exists(extractDir))
-                return; // nothing to apply
+                return;
 
-            // Wait a bit to make sure old process is gone
+            // Wait a bit for old process to exit
             await Task.Delay(1000);
 
             foreach (var file in Directory.GetFiles(extractDir, "*", SearchOption.AllDirectories))
@@ -97,6 +95,5 @@ namespace WpfAutoUpdater
                 UseShellExecute = true
             });
         }
-
     }
 }
