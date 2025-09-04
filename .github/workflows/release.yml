@@ -26,6 +26,18 @@ jobs:
 
       - name: Restore
         run: dotnet restore
+
+      - name: Set version
+        shell: pwsh
+        run: |
+            if (${{ github.ref_type }} -eq 'tag') {
+                # Tag pushed → use tag as version
+                $version = "${{ github.ref_name }}"
+            } else {
+                # Branch push → use default or increment strategy
+                $version = "1.2.0"  # Or implement auto-increment logic here
+            }
+            Write-Host "##[set-output name=version;]$version"
       
       - name: Set version from tag
         shell: pwsh
