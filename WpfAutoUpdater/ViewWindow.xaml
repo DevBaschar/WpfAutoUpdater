@@ -15,6 +15,10 @@
             VerticalAlignment="Center"
             Orientation="Vertical">
             <TextBlock FontSize="50" Text="Hallo World! Bashar" />
+            <TextBlock
+                FontSize="24"
+                Text="{Binding CurrentVersion}"
+                TextAlignment="Center" />
             <Button
                 Height="50"
                 Margin="0,20,0,0"

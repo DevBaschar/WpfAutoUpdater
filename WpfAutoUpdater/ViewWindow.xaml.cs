@@ -18,9 +18,11 @@ namespace WpfAutoUpdater;
 /// </summary>
 public partial class ViewWindow : Window
 {
-    public ViewWindow()
+    public string CurrentVersion { get; set; }
+    public ViewWindow(string currentVersion)
     {
         InitializeComponent();
+        CurrentVersion = currentVersion;
     }
 
     private void Button_Click(object sender, RoutedEventArgs e)

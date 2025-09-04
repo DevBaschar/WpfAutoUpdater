@@ -8,12 +8,9 @@ namespace WpfAutoUpdater.Helpers
     {
         public static string GetCurrentVersion()
         {
-            //var asm = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
+            var asm = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
             //var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
             //if (!string.IsNullOrWhiteSpace(info)) return info;
-            //return asm.GetName().Version?.ToString() ?? "1.1.7";
-
-            var asm = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
             var version = asm.GetName().Version?.ToString();
             return version ?? "1.1.9";
         }

@@ -47,7 +47,7 @@ namespace WpfAutoUpdater
 
         private void ShowView(MainViewModel vm)
         {
-            var view = new ViewWindow { DataContext = vm };
+            var view = new ViewWindow(vm.CurrentVersion) { DataContext = vm };
             MainWindow = view;
             view.Show();
         }
