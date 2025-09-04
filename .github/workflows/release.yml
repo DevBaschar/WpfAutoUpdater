@@ -1,14 +1,15 @@
-
 name: Build and Release
 
 on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-zip:
     runs-on: windows-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,16 +22,69 @@ jobs:
       - name: Restore
         run: dotnet restore
 
-      - name: Publish (win-x64)
+      - name: Publish (win-x64, framework-dependent)
+        shell: pwsh
         run: |
-          dotnet publish WpfAutoUpdater/WpfAutoUpdater.csproj -c Release -r win-x64 --self-contained false -o publish
-          powershell Compress-Archive -Path publish/* -DestinationPath WpfAutoUpdater-win-x64.zip
+          dotnet publish WpfAutoUpdater/WpfAutoUpdater.csproj `
+            -c Release -r win-x64 --self-contained false `
+            -p:PublishSingleFile=true -o out/win-x64
+
+      - name: Create artifacts folder
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+
+      - name: Zip published app
+        shell: pwsh
+        run: Compress-Archive -Path 'out/win-x64/*' -DestinationPath 'artifacts/WpfAutoUpdater-win-x64.zip'
+
+      - name: Upload artifact (for debugging)
+        uses: actions/upload-artifact@v4
+        with:
+          name: WpfAutoUpdater-win-x64
+          path: artifacts/WpfAutoUpdater-win-x64.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            WpfAutoUpdater-win-x64.zip
+          files: artifacts/WpfAutoUpdater-win-x64.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Optional MSIX packaging job (runs if packaging project exists)
+  msix:
+    runs-on: windows-latest
+    needs: build-zip
+    if: ${{ always() }} # will be skipped gracefully if the .wapproj isn't present
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      # Adjust the path below once you add the packaging project
+      - name: Build MSIX (Release|x64)
+        shell: pwsh
+        run: |
+          if (Test-Path 'WpfAutoUpdater.Package/WpfAutoUpdater.Package.wapproj') {
+            msbuild WpfAutoUpdater.Package/WpfAutoUpdater.Package.wapproj `
+              /p:Configuration=Release /p:Platform=x64 `
+              /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly
+          } else {
+            Write-Host "No .wapproj present. Skipping MSIX build."
+          }
+
+      - name: Upload MSIX artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: msix
+          path: |
+            **/*.msixbundle
+            **/*.appinstaller
