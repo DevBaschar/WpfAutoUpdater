@@ -1,11 +1,13 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using WpfAutoUpdater.Helpers;
 using WpfAutoUpdater.Services;
 
@@ -177,16 +179,20 @@ namespace WpfAutoUpdater.ViewModels
             if (string.IsNullOrWhiteSpace(DownloadUrl))
                 throw new InvalidOperationException("No download URL available.");
 
-            string tempFile = Path.Combine(Path.GetTempPath(), "WpfAutoUpdater.zip");
+            string tempZip = Path.Combine(Path.GetTempPath(), "WpfAutoUpdater.zip");
+            string extractDir = Path.Combine(Path.GetTempPath(), "WpfAutoUpdater_Extract");
             string installDir = AppContext.BaseDirectory;
+            string exePath = Environment.ProcessPath ?? throw new InvalidOperationException("Cannot determine process path.");
+            string exeName = Path.GetFileName(exePath);
 
+            // 1) Download
             Status = "Downloading update...";
             ProgressValue = 0;
             ProgressText = string.Empty;
 
             await _updater.DownloadWithProgressAsync(
                 DownloadUrl,
-                tempFile,
+                tempZip,
                 (received, total) =>
                 {
                     ProgressValue = total > 0 ? (received * 100.0 / total) : 0;
@@ -194,32 +200,31 @@ namespace WpfAutoUpdater.ViewModels
                 },
                 ct);
 
+            // 2) Extract to staging
             Status = "Extracting update...";
-
-            // Extract to temp folder first
-            string extractDir = Path.Combine(Path.GetTempPath(), "WpfAutoUpdater_Extract");
             if (Directory.Exists(extractDir)) Directory.Delete(extractDir, true);
-            ZipFile.ExtractToDirectory(tempFile, extractDir);
+            ZipFile.ExtractToDirectory(tempZip, extractDir);
 
-            // Copy files over the current install directory
-            foreach (var file in Directory.GetFiles(extractDir, "*", SearchOption.AllDirectories))
+            // 3) Spawn helper from %TEMP% (copy of this EXE), then quit
+            Status = "Preparing to apply update...";
+            ProgressText = "Starting apply helper";
+
+            // Copy the current EXE to temp so the original EXE isn't locked during copy
+            string helperPath = Path.Combine(Path.GetTempPath(), exeName); // same name in temp is fine
+            File.Copy(exePath, helperPath, overwrite: true);
+
+            // Start helper with arguments:
+            // --apply-update "<stagingDir>" --from-pid <currentpid> --exe-name "<exeName>"
+            var psi = new ProcessStartInfo
             {
-                string relative = Path.GetRelativePath(extractDir, file);
-                string destPath = Path.Combine(installDir, relative);
+                FileName = helperPath,
+                Arguments = $"--apply-update \"{extractDir}\" --from-pid {Environment.ProcessId} --exe-name \"{exeName}\"",
+                UseShellExecute = true
+            };
+            Process.Start(psi);
 
-                Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
-                File.Copy(file, destPath, overwrite: true);
-            }
-
-            Status = "Update installed successfully.";
-            ProgressValue = 100;
-            ProgressText = "Done";
-
-            // ❌ Do not restart or shutdown here.
-            // App.xaml.cs will handle restart logic after calling this method.
-
-            // 👉 Notify App.xaml.cs that we're done
-            UpdateCompleted?.Invoke(this, EventArgs.Empty);
+            // Close current app so files can be replaced
+            Application.Current.Shutdown();
         }
     }
 }
