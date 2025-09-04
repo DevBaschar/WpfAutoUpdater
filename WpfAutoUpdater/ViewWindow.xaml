@@ -14,7 +14,7 @@
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Orientation="Vertical">
-            <TextBlock FontSize="50" Text="Hallo World! Bashar" />
+            <TextBlock FontSize="50" Text="Hallo World! Bashar New" />
             <TextBlock
                 FontSize="24"
                 Text="{Binding CurrentVersion}"
