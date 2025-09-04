@@ -1,8 +1,9 @@
-
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System;
 using System.IO;
+using System.IO.Compression;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using WpfAutoUpdater.Helpers;
@@ -41,8 +42,16 @@ namespace WpfAutoUpdater.ViewModels
                 var release = await _updater.GetLatestReleaseAsync();
                 LatestVersion = release.version;
 
-                var cur = new Version(CurrentVersion.TrimStart('v'));
-                var lat = new Version(release.version.TrimStart('v'));
+                // Make version parsing a bit more resilient
+                var curStr = (CurrentVersion ?? "0.0").TrimStart('v', 'V');
+                var latStr = (release.version ?? "0.0").TrimStart('v', 'V');
+
+                if (!Version.TryParse(curStr, out var cur))
+                    cur = new Version(0, 0);
+
+                if (!Version.TryParse(latStr, out var lat))
+                    lat = cur;
+
                 IsUpdateAvailable = lat > cur;
                 Status = IsUpdateAvailable ? $"Update available: {release.version}" : "You are up to date.";
             }
@@ -64,8 +73,7 @@ namespace WpfAutoUpdater.ViewModels
             try
             {
                 Status = "Downloading update...";
-                progressValue = 0;
-                OnPropertyChanged(nameof(ProgressValue));
+                ProgressValue = 0;
                 ProgressText = string.Empty;
 
                 var tmpZip = Path.Combine(Path.GetTempPath(), "WpfAutoUpdaterUpdate.zip");
@@ -83,8 +91,9 @@ namespace WpfAutoUpdater.ViewModels
                 {
                     if (total > 0)
                     {
-                        ProgressValue = Math.Round(bytes * 100.0 / total, 2);
-                        ProgressText = $"{ProgressValue}% ({bytes / 1024 / 1024} MB of {total / 1024 / 1024} MB)";
+                        var pct = Math.Round(bytes * 100.0 / total, 2);
+                        ProgressValue = pct;
+                        ProgressText = $"{pct}% ({bytes / 1024 / 1024} MB of {total / 1024 / 1024} MB)";
                     }
                     else
                     {
@@ -93,41 +102,50 @@ namespace WpfAutoUpdater.ViewModels
                 }, CancellationToken.None);
 
                 Status = "Extracting update...";
-                System.IO.Compression.ZipFile.ExtractToDirectory(tmpZip, tmpDir);
+                ZipFile.ExtractToDirectory(tmpZip, tmpDir, overwriteFiles: true);
 
-                // Create a simple updater script to replace files after this app exits
+                // Prepare updater script to copy files after the app exits
                 var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName!;
                 var appDir = Path.GetDirectoryName(exePath)!;
                 var updaterBat = Path.Combine(Path.GetTempPath(), "run_update.bat");
-                var guid = Guid.NewGuid().ToString("N");
-                var restartCmd = f'"{exePath}"';
-                bat = f"""
-@echo off
-set SRC="{tmpDir}"
-set DEST="{appDir}"
+
+                // Lock file ensures the updater waits while the app is still closing
+                var lockFile = Path.Combine(Path.GetTempPath(), $"lock_{Guid.NewGuid():N}.tmp");
+                File.WriteAllText(lockFile, "lock");
+
+                // Build a .bat script (C# string interpolation + verbatim)
+                var bat = $@"@echo off
+setlocal
+set SRC=""{tmpDir}""
+set DEST=""{appDir}""
 :waitloop
 ping 127.0.0.1 -n 2 > nul
-if exist "%~dp0lock_{guid}.tmp" goto waitloop
-xcopy /E /Y /I "%SRC%\*" "%DEST%" > nul
-start "" {restartCmd}
-"""
-                with open(updaterBat, 'w', encoding='utf-8') as f:
-                    f.write(bat)
+if exist ""{lockFile}"" goto waitloop
+xcopy /E /Y /I ""%SRC%\*"" ""%DEST%\"" > nul
+start """" ""{exePath}""
+endlocal
+";
 
-                // Create lock file and schedule deletion on exit so updater waits until app closes
-                var lockFile = Path.Combine(Path.GetTempPath(), $"lock_{guid}.tmp");
-                File.WriteAllText(lockFile, "lock");
-                AppDomain.CurrentDomain.ProcessExit += (_, __) => {
-                    try { File.Delete(lockFile); } catch { }
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo {
-                        FileName = updaterBat,
-                        UseShellExecute = true,
-                        Verb = "runas"
-                    }); } catch { }
+                File.WriteAllText(updaterBat, bat, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+                // On exit: delete the lock (so the .bat proceeds) and run the updater elevated if needed
+                AppDomain.CurrentDomain.ProcessExit += (_, __) =>
+                {
+                    try { File.Delete(lockFile); } catch { /* ignore */ }
+                    try
+                    {
+                        var psi = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = updaterBat,
+                            UseShellExecute = true,
+                            Verb = "runas" // prompt for elevation when copying into Program Files
+                        };
+                        System.Diagnostics.Process.Start(psi);
+                    }
+                    catch { /* ignore */ }
                 };
 
                 Status = "Update ready. The app will restart to complete installation...";
-
                 await Task.Delay(1200);
                 System.Windows.Application.Current.Shutdown();
             }
