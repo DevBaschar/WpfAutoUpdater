@@ -1,6 +1,9 @@
-using System;
+﻿using System;
+using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
+using WpfAutoUpdater.ViewModels;
 
 namespace WpfAutoUpdater
 {
@@ -10,65 +13,71 @@ namespace WpfAutoUpdater
         {
             base.OnStartup(e);
 
-            // Detect silent mode: run as a background updater and exit.
             bool runSilent = e.Args.Any(a =>
                 a.Equals("--silent-update", StringComparison.OrdinalIgnoreCase));
 
-            var vm = new ViewModels.MainViewModel();
+            var vm = new MainViewModel();
 
             if (runSilent)
             {
                 try
                 {
-                    // Silent: check + install if available, then exit.
                     await vm.CheckForUpdateAsync();
-
                     if (vm.IsUpdateAvailable)
-                    {
                         await vm.DownloadAndInstallAsync();
-                        // If your updater restarts or shuts down, we won't reach further code.
-                        Shutdown(); // Exit silently if we returned here (no-op otherwise).
-                        return;
-                    }
-
-                    Shutdown(); // No update; exit silently.
-                    return;
                 }
                 catch
                 {
-                    // Fail closed in silent mode
                     Shutdown(-1);
-                    return;
                 }
+
+                Shutdown();
+                return;
             }
 
-            // Interactive path
+            // 🚀 Normal mode
             try
             {
-                // Check first before showing the main window
                 await vm.CheckForUpdateAsync();
 
                 if (vm.IsUpdateAvailable)
                 {
-                    // Download + install. If your method restarts/shuts down,
-                    // code below will not execute in the old instance.
-                    await vm.DownloadAndInstallAsync();
+                    // 👉 Show MainWindow for interactive update
+                    var updateWindow = new MainWindow
+                    {
+                        DataContext = vm
+                    };
+
+                    // When update finishes, switch to View.xaml
+                    vm.UpdateCompleted += (_, __) =>
+                    {
+                        updateWindow.Close();
+
+                        var viewWindow = new View
+                        {
+                            DataContext = vm
+                        };
+                        MainWindow = viewWindow;
+                        viewWindow.Show();
+                    };
+
+                    MainWindow = updateWindow;
+                    updateWindow.Show();
+                    return;
                 }
             }
             catch
             {
-                // Optionally log the failure and continue to launch the UI.
-                // e.g., Logger.Error(ex, "Update check/apply failed");
+                // log if needed, fallback to UI
             }
 
-            // If we're still here: either no update, update failed, or update completed without restart.
-            var mainWindow = new View
+            // 👉 No update → go directly to View.xaml
+            var view = new View
             {
                 DataContext = vm
             };
-
-            MainWindow = mainWindow;
-            mainWindow.Show();
+            MainWindow = view;
+            view.Show();
         }
     }
 }
