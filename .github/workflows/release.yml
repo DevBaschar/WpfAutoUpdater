@@ -2,9 +2,8 @@
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
-  workflow_dispatch:
+    branches:
+      - master
   
 permissions:
   contents: write
