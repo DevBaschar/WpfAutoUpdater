@@ -10,10 +10,16 @@
     Height="450"
     mc:Ignorable="d">
     <Grid>
-        <TextBlock
+        <StackPanel
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
-            FontSize="50"
-            Text="Hallo World! Bashar" />
+            Orientation="Vertical">
+            <TextBlock FontSize="50" Text="Hallo World! Bashar" />
+            <Button
+                Height="50"
+                Margin="0,20,0,0"
+                Click="Button_Click"
+                Content="Open" />
+        </StackPanel>
     </Grid>
 </Window>

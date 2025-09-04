@@ -14,18 +14,12 @@ using System.Windows.Shapes;
 
 namespace WpfAutoUpdater;
 /// <summary>
-/// Interaktionslogik für View.xaml
+/// Interaktionslogik für NewWindow.xaml
 /// </summary>
-public partial class ViewWindow : Window
+public partial class NewWindow : Window
 {
-    public ViewWindow()
+    public NewWindow()
     {
         InitializeComponent();
-    }
-
-    private void Button_Click(object sender, RoutedEventArgs e)
-    {
-        NewWindow newWindow = new NewWindow();
-        newWindow.Show();
     }
 }
