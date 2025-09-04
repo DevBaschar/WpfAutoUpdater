@@ -22,7 +22,11 @@ namespace WpfAutoUpdater
                     await vm.DownloadAndInstallAsync();
                     return; // app will shutdown after staging
                 }
-                Shutdown();
+                //Shutdown();
+
+                View view = new View();
+                view.DataContext = vm;
+                view.Show();
             }
         }
     }
