@@ -11,11 +11,6 @@ on:
 permissions:
   contents: write
 
-# Use dynamic name
-defaults:
-  run:
-    shell: pwsh
-
 jobs:
   build-zip:
     runs-on: windows-latest
@@ -31,7 +26,7 @@ jobs:
 
       - name: Restore
         run: dotnet restore
-
+      
       - name: Set version from tag
         shell: pwsh
         run: |
@@ -75,7 +70,7 @@ jobs:
         shell: pwsh
         run: |
             $xml = [xml](Get-Content ./WpfAutoUpdater/WpfAutoUpdater.csproj)
-            [string] $version = [Version] $xml.Project.PropertyGroup.ApplicationDisplayVersion
+            [string] $version = [Version] $xml.Project.PropertyGroup.Version
             echo "version=$($version)" >> $env:GITHUB_OUTPUT
 
       - name: Create Tag
@@ -93,8 +88,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-            tag_name: v${{ steps.extractVersion.outputs.version }}
-            name: Release v${{ steps.extractVersion.outputs.version }}
+            tag_name: v${{ steps.extractVersion.outputs.version }}
+            name: Release ${{ github.ref_name }}
             files: artifacts/WpfAutoUpdater-win-x64.zip
             generate_release_notes: true
         env:
