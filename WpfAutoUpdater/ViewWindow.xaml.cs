@@ -27,7 +27,7 @@ public partial class ViewWindow : Window
 
     private void Button_Click(object sender, RoutedEventArgs e)
     {
-        NewWindow newWindow = new NewWindow();
-        newWindow.Show();
+        //NewWindow newWindow = new NewWindow();
+        //newWindow.Show();
     }
 }
