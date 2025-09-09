@@ -244,7 +244,7 @@ if exist ""{lockFile}"" (
   timeout /t 1 /nobreak >nul
   goto waitloop
 )
-robocopy ""%SRC%"" ""%DEST%"" /MIR /R:5 /W:2 /NFL /NDL /NP /NJH /NJS >nul
+robocopy ""%SRC%"" ""%DEST%"" /E /R:5 /W:2 /NFL /NDL /NP /NJH /NJS >nul
 start """" ""{exePath}"" {relaunchArg}
 endlocal
 "; // write /E instead of /MIR to avoid deleting files
