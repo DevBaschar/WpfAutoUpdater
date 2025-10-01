@@ -13,9 +13,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 
 namespace WpfAutoUpdater;
-/// <summary>
-/// Interaktionslogik für View.xaml
-/// </summary>
+
 public partial class ViewWindow : Window
 {
     public string CurrentVersion { get; set; }
@@ -27,7 +25,6 @@ public partial class ViewWindow : Window
 
     private void Button_Click(object sender, RoutedEventArgs e)
     {
-        //NewWindow newWindow = new NewWindow();
-        //newWindow.Show();
+        MessageBox.Show($"Current Version: {CurrentVersion}", "Version Info", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 }

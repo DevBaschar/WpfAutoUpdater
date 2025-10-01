@@ -14,7 +14,7 @@
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Orientation="Vertical">
-            <TextBlock FontSize="50" Text="Bruh :)" />
+            <TextBlock FontSize="50" Text="New Version" />
             <TextBlock
                 FontSize="24"
                 Text="{Binding CurrentVersion}"

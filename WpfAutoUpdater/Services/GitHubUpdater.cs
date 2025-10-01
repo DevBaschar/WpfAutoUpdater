@@ -11,8 +11,8 @@ public class GitHubUpdater
 {
     private readonly HttpClient _http = new();
 
-    private const string Owner = "DevBaschar";
-    private const string Repo = "WpfAutoUpdater";
+    private const string _owner = "DevBaschar";
+    private const string _repo = "WpfAutoUpdater";
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
@@ -28,9 +28,10 @@ public class GitHubUpdater
     public async Task<(string version, string? downloadUrl)> GetLatestReleaseAsync()
     {
         using var req = new HttpRequestMessage(HttpMethod.Get,
-            $"https://api.github.com/repos/{Owner}/{Repo}/releases/latest");
+            $"https://api.github.com/repos/{_owner}/{_repo}/releases/latest");
+
         // GitHub API requires a UA header:
-        req.Headers.UserAgent.ParseAdd("WpfAutoUpdater/1.0 (+https://github.com/DevBaschar/WpfAutoUpdater)");
+        req.Headers.UserAgent.ParseAdd($"{_repo}/1.0 (+https://github.com/DevBaschar/{_repo})");
 
         using var resp = await _http.SendAsync(req);
         resp.EnsureSuccessStatusCode();
