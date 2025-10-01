@@ -3,6 +3,8 @@
 
 A minimal WPF app that checks GitHub Releases and can download/install updates.
 
+ ![Image Alt](https://github.com/DevBaschar/WpfAutoUpdater/blob/master/Screenshot%202025-10-01%20151505.png?raw=true)
+
 ## Build
 ```bash
 dotnet restore
